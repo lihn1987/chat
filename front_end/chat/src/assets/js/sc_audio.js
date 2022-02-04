@@ -155,3 +155,26 @@ class ScAudio {
 export {
     ScAudio
 }
+
+/*
+
+var Codec = {
+    speex: new Speex({quality: 6}),
+
+    // TODO(Bieber): See if you need to make a copy before returning the buffer
+    encode: function(buffer) {
+        // To preserve length, encode a multiple of 320 samples.
+        var datalen = buffer.length;
+        var shorts = new Int16Array(datalen);
+        for(var i = 0; i < datalen; i++) {
+            shorts[i] = Math.floor(Math.min(1.0, Math.max(-1.0, buffer[i])) * 32767);
+        }
+        var encoded = Codec.speex.encode(shorts, true);
+        return encoded[0];
+    },
+
+    decode: function(buffer) {
+        return Codec.speex.decode(buffer);
+    }
+};
+*/

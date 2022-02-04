@@ -1,0 +1,10 @@
+[workspace]
+members = [
+    "ws_server",
+    "rest_server",
+    "mongo_interface",
+    "msg_interface"
+]
+
+
+ 

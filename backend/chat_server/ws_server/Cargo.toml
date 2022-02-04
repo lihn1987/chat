@@ -1,0 +1,20 @@
+[package]
+name = "ws_server"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+warp = "0.2"
+parking_lot = "0.10.0"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = { version = "1.0" }
+tokio = { version = "0.2", features = ["macros"] }
+websocket = "0.24.0"
+secp256k1 = "0.20"
+sha256 = "1.0"
+hex = "0.4"
+
+mongo_interface = { path = "../mongo_interface" }
+msg_interface = { path = "../msg_interface" }

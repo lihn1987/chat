@@ -1,0 +1,3 @@
+.msg_input .el-textarea__inner{
+      height: calc( 164px - 40px );
+}

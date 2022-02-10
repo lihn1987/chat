@@ -36,10 +36,10 @@ pub struct MsgHistory {
 }
 
 impl MsgHistory {
-    pub fn new(user_pubkey: String, peer_pubkey: String) -> MsgHistory {
+    pub fn new(user_pubkey: String) -> MsgHistory {
         return MsgHistory{
             user_pubkey: user_pubkey,
-            history: [(peer_pubkey.clone(), MsgHistoryItem::new(0))].into(),
+            history: [].into(),
         };
     }
 }

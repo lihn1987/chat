@@ -187,12 +187,51 @@ impl MongoInterface {
         let collection = self.db.collection::<MsgHistory>("msg_history");
 
         // 将创建用户的聊天数据
-        let _ = collection.insert_one(MsgHistory::new(msg.base_msg.from.clone(), msg.base_msg.to.clone()), None);
-        let _ = collection.insert_one(MsgHistory::new(msg.base_msg.to.clone(), msg.base_msg.from.clone()), None);
+        let _ = collection.insert_one(MsgHistory::new(msg.base_msg.from.clone()), None);
+        let _ = collection.insert_one(MsgHistory::new(msg.base_msg.to.clone()), None);
+        // 插入发送者
+        let mut result = collection.update_one(
+            doc!{
+                "user_pubkey":msg.base_msg.from.clone(),
+                "history.".to_string()+&msg.base_msg.to: {
+                    "$exists":false
+                }
+            }, 
+            doc!{
+                "$set": {
+                    "history.".to_string()+&msg.base_msg.to :{
+                        "unread_count": 0,
+                        "msg_list": []
+                    }
+                }
+            }, 
+            None);
+        println!("插入发送者->接收者历史记录,{:?}", result);
+        result = collection.update_one(
+            doc!{
+                "user_pubkey":msg.base_msg.to.clone(),
+                "history.".to_string()+&msg.base_msg.from: {
+                    "$exists":false
+                }
+            }, 
+            doc!{
+                "$set": {
+                    "history.".to_string()+&msg.base_msg.from :{
+                        "unread_count": 0,
+                        "msg_list": []
+                    }
+                }
+            }, 
+            None);
+            println!("接收者->插入发送者历史记录,{:?}", result);
         // 插入发送者
         let x = collection.update_one(
             doc!{"user_pubkey":msg.base_msg.from.clone()}, 
-            doc!{"$push": {"history.".to_string()+&msg.base_msg.to+".msg_list" :serde_json::to_string(&msg).unwrap()}}, 
+            doc!{
+                "$push": {
+                    "history.".to_string()+&msg.base_msg.to+".msg_list" :serde_json::to_string(&msg).unwrap()
+                }
+            }, 
             None);
         println!("插入聊天历史{:?}", x);
         // 插入接收者

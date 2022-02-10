@@ -71,7 +71,7 @@
             
             <div class = "contact_info" @click="ClickContact(user_info.friends[i-1])">
               <div class = "contact_nick"> {{contract_info[user_info.friends[i-1]].nick_name}} </div>
-              <div class = "contact_recent">{{contract_info[user_info.friends[i-1]].msg_list.length?contract_info[user_info.friends[i-1]].msg_list[contract_info[user_info.friends[i-1]].msg_list.length - 1].content: ""}}</div>
+              <div class = "contact_recent">{{contract_info[user_info.friends[i-1]].msg_list.length?(contract_info[user_info.friends[i-1]].msg_list[contract_info[user_info.friends[i-1]].msg_list.length - 1].msg_type == 2?"音频":contract_info[user_info.friends[i-1]].msg_list[contract_info[user_info.friends[i-1]].msg_list.length - 1].content): ""}}</div>
             </div>
           </el-row>
         </div>
@@ -96,8 +96,7 @@
               <div class="his_msg" v-if="contract_info[current_user.pubkey].msg_list[i-1].msg_type == 1">{{contract_info[current_user.pubkey].msg_list[i-1].content}}</div>
               <div class="his_msg" v-if="contract_info[current_user.pubkey].msg_list[i-1].msg_type == 2">
                 <el-row>
-                  <canvas id="canvas" width="240" height="32"></canvas>
-                  <el-button @click="PlayHistoryAudio(contract_info[current_user.pubkey].msg_list[i-1].content)">播放音频</el-button>
+                  <el-button type="primary" @click="PlayHistoryAudio(contract_info[current_user.pubkey].msg_list[i-1].content)" >播放音频</el-button>
                 </el-row>
               </div>
             </div>
@@ -639,6 +638,7 @@ export default {
     },
     StopPlay() {
       this.recorder.StopPlay()
+      
     },
     PlayHistoryAudio(audio_content) {
       var audio_json = JSON.parse(audio_content)
@@ -658,10 +658,30 @@ export default {
       }
       audio.StartPlayBuffer(audio_json.audio_type, buf)
     },
+    DrawHistoryAudio(audio_content) {
+      var hash = this.Hash(audio_content)
+      var audio_json = JSON.parse(audio_content)
+      audio_json.audio_msg = JSON.parse(audio_json.audio_msg)
+      console.log(audio_json)
+
+      var buf = []
+      for(var i = 0; i < audio_json.audio_msg.length; i++ ) {
+        var array = new Float32Array(Object.keys(audio_json.audio_msg[i]).length)
+
+        for ( var k in audio_json.audio_msg[i]){
+          array[k] = audio_json.audio_msg[i][k] 
+        }
+        buf.push(array)
+      }
+      ScAudio.DrawByBuf("canvas_"+hash, buf)
+    },
     ResetAudio() {
       if (this.recorder){
         this.recorder.Reset();
       }
+    },
+    Hash(input) {
+      return sc_crypto.Hash(input)
     }
   }
 }

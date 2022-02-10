@@ -32,6 +32,17 @@ class SubChatCrypto {
         var rtn = sc_crypto.AesDecode(msg, iv, pswd)
         return rtn
     }
+    Hash(input){
+        var hash = 0, i, chr;
+        if (input.length === 0) return hash;
+        for (i = 0; i < input.length; i++) {
+          chr   = input.charCodeAt(i);
+          hash  = ((hash << 5) - hash) + chr;
+          hash |= 0; // Convert to 32bit integer
+        }
+        hash = (hash & 0x7FFFFFFF);
+        return hash;
+    }
 }
 var sc_crypto = new SubChatCrypto()
 export {

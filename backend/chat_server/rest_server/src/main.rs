@@ -2,6 +2,7 @@
 mod subchat_rest_server;
 use crate::subchat_rest_server::SubChatRestServer;
 use mongo_interface::{MongoInterface};
+
 #[tokio::main]
 async fn main() {
   {
@@ -19,6 +20,4 @@ async fn main() {
   println!("等待restfull服务");
   rest_server.start().await;
   println!("结束restfull服务");
-
 }
-

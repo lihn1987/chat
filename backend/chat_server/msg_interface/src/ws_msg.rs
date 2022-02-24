@@ -13,6 +13,7 @@ pub const MSG_LOGIN:u32 = 0;
 pub const MSG_TXT:u32 = 1;
 pub const MSG_AUDIO:u32 = 2;
 pub const MSG_CLEAR_UNREAD:u32 = 101;
+pub const MSG_IMAGE:u32 = 3;
 #[derive(Default, Debug, Serialize, Deserialize)]
 pub struct MsgBase{
     pub msg_type: u32,

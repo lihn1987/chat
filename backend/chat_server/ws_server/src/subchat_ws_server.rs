@@ -123,7 +123,8 @@ impl SubChatWsServer {
                                                     nick: pubkey.clone(),
                                                     sex: 0, // 0 unknow, 1 man, 2 woman 
                                                     age: 0,
-                                                    friends: vec![]
+                                                    friends: vec![],
+                                                    groups: vec![]
                                                 });
                                                 println!("释放锁");
                                             }
@@ -143,7 +144,7 @@ impl SubChatWsServer {
                                         }
                                     }
                                 },
-                                MSG_TXT | MSG_AUDIO => {
+                                MSG_TXT | MSG_AUDIO | MSG_IMAGE => {
                                     if pubkey != msg.base_msg.from {
                                         panic!("收到非本账户信息，危险异常");
                                     }

@@ -65,6 +65,13 @@ class SubChainRest {
     ClearUnreadInfo(pubkey){
         return this.Request(pubkey, "clear_unreadinfo");
     }
+    CreateGroup( group_name, access, visible){
+        return this.Request(JSON.stringify({
+            name: group_name,           // 群名称  
+            access: access,            // 进入许可
+            visible_by_name: visible
+        }), "create_group")
+    }
 }
 
 export {

@@ -1,12 +1,13 @@
 
 
 use std::net::{SocketAddr};
+use std::str::FromStr;
 use warp::Filter;
 extern crate hex;
 use mongo_interface::{MongoInterface};
 use msg_interface::rest_msg::*;
 use msg_interface::mongo_msg::*;
-
+use rand::Rng;
 pub struct SubChatRestServer{
     addr: SocketAddr
 }
@@ -55,6 +56,30 @@ impl SubChatRestServer {
             .and(warp::body::json())
             .map(|info| SubChatRestServer::clear_unreadinfo(info));
 
+        let create_group = warp::post()
+            .and(warp::path!("subchain"/"create_group"))
+            .and(warp::body::content_length_limit(1024 * 16))
+            .and(warp::body::json())
+            .map(|info| SubChatRestServer::create_group(info));
+
+        let get_group_info_by_pubkey = warp::post()
+            .and(warp::path!("subchain"/"get_group_info_by_pubkey"))
+            .and(warp::body::content_length_limit(1024 * 16))
+            .and(warp::body::json())
+            .map(|info| SubChatRestServer::get_group_info_by_pubykey(info));
+
+        let get_group_info_by_name = warp::post()
+            .and(warp::path!("subchain"/"get_group_info_by_name"))
+            .and(warp::body::content_length_limit(1024 * 16))
+            .and(warp::body::json())
+            .map(|info| SubChatRestServer::get_group_info_by_name(info));
+
+        let join_group = warp::post()
+            .and(warp::path!("subchain"/"join_group"))
+            .and(warp::body::content_length_limit(1024 * 16))
+            .and(warp::body::json())
+            .map(|info| SubChatRestServer::join_group(info));
+
         warp::serve(
             get_self_info
             .or(get_user_info)
@@ -62,6 +87,10 @@ impl SubChatRestServer {
             .or(change_nick_name)
             .or(get_all_chat_msg_by_latestinfo)
             .or(clear_unreadinfo)
+            .or(create_group)
+            .or(get_group_info_by_pubkey)
+            .or(get_group_info_by_name)
+            .or(join_group)
         )
         .run(self.addr).await
     }
@@ -212,4 +241,128 @@ impl SubChatRestServer {
             data: String::new()
         });
     }
+
+    // 创建一个群
+    fn create_group(info: RequestComm) -> warp::reply::Json {
+        if !info.check_sign() {
+            println!("创建群失败，没有权限");
+            return warp::reply::json(&ResponseComm{
+                error: ERROR_NO_POWER,
+                data: String::from("")
+            });
+        }
+        let mutex_db = MongoInterface::get_instance();
+        let mut db = mutex_db.lock().unwrap();
+        let create_group_request: CreateGroupRequest;
+        match serde_json::from_str(&info.msg.param) {
+            Ok(v) => create_group_request = v,
+            Err(e) => {
+                return warp::reply::json(&ResponseComm{
+                    error: ERROR_PARAM_ERROR,
+                    data: String::new()
+                });
+            }
+        }
+        let mut group_pubkey = create_rng_pubkey();
+        println!("group pubkey: {:?}", group_pubkey);
+        // 找到一个没用过的群pubkey
+        while !db.get_group_info_by_pubkey(&group_pubkey).is_none() {
+            group_pubkey = create_rng_pubkey();
+        }
+
+        let group_info = create_group_request.ToGroupInfo(&group_pubkey, &info.msg.from);
+        let create_result = db.create_group(&group_info);
+        if create_result.0 {
+            return warp::reply::json(&ResponseComm{
+                error: 0,
+                data: create_result.1
+            });
+        } else {
+            return warp::reply::json(&ResponseComm{
+                error: ERROR_GROUP_NAME_REPEAT,
+                data: String::new()
+            });
+        }
+    }
+
+    // 查询一个组，通过pubkey
+    fn get_group_info_by_pubykey(info: RequestComm) -> warp::reply::Json {
+        let mutex_db = MongoInterface::get_instance();
+        let mut db = mutex_db.lock().unwrap();
+        let mut group_pubkey = info.msg.param;
+        println!("group pubkey: {:?}", group_pubkey);
+        // 找到一个没用过的群pubkey
+        match db.get_group_info_by_pubkey(&group_pubkey) {
+            None => warp::reply::json(&ResponseComm{
+                error: 1,
+                data: String::new()
+            }),
+            Some(v) => {
+                if v.visible_by_name == true {
+                    warp::reply::json(&ResponseComm{
+                        error: 0,
+                        data: String::new()
+                    })
+                } else {
+                    warp::reply::json(&ResponseComm{
+                        error: 1,
+                        data: String::new()
+                    })
+                }
+            }
+        }
+    }
+
+    // 查询一系列群，通过群名
+    fn get_group_info_by_name(info: RequestComm) -> warp::reply::Json {
+        let mutex_db = MongoInterface::get_instance();
+        let mut db = mutex_db.lock().unwrap();
+        let group_name = info.msg.param;
+        println!("group group_name: {:?}", group_name);
+        // 找到一个没用过的群pubkey
+        let res = db.get_group_info_by_group_name(&group_name);
+        let mut response_data = String::from_str("[").unwrap();
+        for i in 0..res.len() {
+            response_data += &serde_json::to_string(&res[i]).unwrap();
+            if i != res.len() - 1 {
+                response_data += ",";
+            }
+        }
+        response_data += "]";
+        warp::reply::json(&ResponseComm{
+            error: 0,
+            data: response_data
+        })
+    }
+
+    fn join_group(info: RequestComm) -> warp::reply::Json {
+        if !info.check_sign() {
+            println!("创建群失败，没有权限");
+            return warp::reply::json(&ResponseComm{
+                error: ERROR_NO_POWER,
+                data: String::from("")
+            });
+        }
+        let mutex_db = MongoInterface::get_instance();
+        let mut db = mutex_db.lock().unwrap();
+        let create_group_request: CreateGroupRequest = serde_json::from_str(&info.msg.param).unwrap();
+        let mut group_pubkey = create_rng_pubkey();
+        println!("group pubkey: {:?}", group_pubkey);
+
+        return warp::reply::json(&ResponseComm{
+            error: db.join_group(&info.msg.from, &group_pubkey),
+            data: String::new()
+        });
+    }
+}
+// 用于生成String的
+fn create_rng_pubkey() -> String {
+    let mut rng = rand::thread_rng();
+    let mut rtn = String::new();
+    for _i in 0..8 {
+        let rand = rng.gen::<u32>();
+        rtn += &(format!("{:x}", rand));
+    }
+    rtn += &(format!("{:x}", rng.gen::<u8>()));
+    return rtn;
 }

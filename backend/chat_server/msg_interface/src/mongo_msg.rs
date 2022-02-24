@@ -1,12 +1,14 @@
 use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, ops::Sub};
+use std::convert::From;
 #[derive(Debug, Default, Serialize, Deserialize)]
 pub struct UserInfo {
     pub pubkey: String,
     pub nick: String,
     pub sex: u8, // 0 unknow, 1 man, 2 woman 
     pub age: u8,
-    pub friends: Vec<String/*pubkey */>
+    pub friends: Vec<String/*pubkey */>,
+    pub groups: Vec<String/*pubkey */>
 }
  
 #[derive(Debug, Default, Serialize, Deserialize)]
@@ -43,11 +45,13 @@ impl MsgHistory {
         };
     }
 }
+
 #[derive(Debug, Default,Serialize, Deserialize)]
 pub struct MsgHistoryItem {
     pub unread_count: u64,
     pub msg_list: std::vec::Vec<String>/*MsgSigned json */
 }
+
 impl MsgHistoryItem {
     pub fn new(unread_count: u64) -> MsgHistoryItem {
         return MsgHistoryItem {
@@ -62,6 +66,7 @@ impl MsgHistoryItem {
 pub struct MsgHistoryAllByUnread {
     list: Vec<MsgHistoryAllByUnreadItem>
 }
+
 impl MsgHistoryAllByUnread {
     pub fn from_history(history: &MsgHistory, before: u64, after: u64) -> MsgHistoryAllByUnread{
         let mut  rtn = MsgHistoryAllByUnread {
@@ -93,6 +98,7 @@ impl MsgHistoryAllByUnread {
         return rtn;
     }
 }
+
 #[derive(Debug, Default,Serialize, Deserialize)]
 pub struct MsgHistoryAllByUnreadItem {
     pubkey: String,
@@ -101,6 +107,17 @@ pub struct MsgHistoryAllByUnreadItem {
     msg_list_unread: Vec<String>,
     latest_timestamp: u64
 }
+
+#[derive(Debug, Default,Deserialize, Serialize)]
+pub struct GroupInfo {
+    pub pubkey: String,         // 群公钥
+    pub name: String,           // 群名称  
+    pub access: u32,            // 进入许可 pub const GROUP_ACCESS_ANYONE: u32 = 1; GROUP_ACCESS_NEED_OWNER_ALLOW: u32 = 2; 
+    pub visible_by_name: bool,  // 是否允许通过群名被查找到
+    pub owner: String,          // 群主
+    pub members: Vec<String>    // 群员
+}
+
 /*
 { "_id" : ObjectId("61e6417713980495c566c244"), 
 "user_pubkey" : "03848f4284c4d8bdaa43ce52304cfac8a20fb54e64dcee877e1d10402ef971099c", 

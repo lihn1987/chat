@@ -7,6 +7,7 @@ const MSG_LOGIN = 0;
 const MSG_TXT = 1;
 const MSG_AUDIO = 2;
 const MSG_AUDIO_TYPE_1 = 1;//json，无压缩
+const MSG_IMAGE = 3;
 const MSG_CLEAR_UNREAD = 101;
 // struct MsgBase{
 //     msg_type: u32,
@@ -166,6 +167,27 @@ class SubChainSocket {
         sc_socket.ws.send(JSON.stringify(msg))
         return time_now
     }
+    SendImage(to, image_src) {
+        var prikey_buf = Buffer(this.pri_key, "hex")
+        var pubkey_buf = Buffer.from(secp256k1.publicKeyCreate(prikey_buf))
+        var time_now = Date.now()
+        var msg_base = {
+            msg_type: MSG_IMAGE,
+            from: pubkey_buf.toString("hex"),
+            to: to,
+            msg: image_src,
+            time_stamp: time_now
+        }
+        // 对消息的msg进行加密处理
+        msg_base.msg = sc_crypto.EcdhEncode(image_src, msg_base.time_stamp, sc_socket.pri_key, to)
+        console.log("msg_base", msg_base)
+        console.log(Buffer.from(JSON.stringify(msg_base), "utf8"))
+
+        var msg = this.MsgBase2Msg(msg_base)
+        // console.log("发送消息", JSON.stringify(msg))
+        sc_socket.ws.send(JSON.stringify(msg))
+        return time_now
+    }
     ClearUnread(to) {
         var prikey_buf = Buffer(this.pri_key, "hex")
         var pubkey_buf = Buffer.from(secp256k1.publicKeyCreate(prikey_buf))
@@ -190,5 +212,6 @@ export {
     MSG_LOGIN,
     MSG_TXT,
     MSG_AUDIO,
-    MSG_AUDIO_TYPE_1
+    MSG_AUDIO_TYPE_1,
+    MSG_IMAGE
 }

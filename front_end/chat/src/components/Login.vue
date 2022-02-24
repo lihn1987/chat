@@ -71,7 +71,10 @@
             
             <div class = "contact_info" @click="ClickContact(user_info.friends[i-1])">
               <div class = "contact_nick"> {{contract_info[user_info.friends[i-1]].nick_name}} </div>
-              <div class = "contact_recent">{{contract_info[user_info.friends[i-1]].msg_list.length?(contract_info[user_info.friends[i-1]].msg_list[contract_info[user_info.friends[i-1]].msg_list.length - 1].msg_type == 2?"音频":contract_info[user_info.friends[i-1]].msg_list[contract_info[user_info.friends[i-1]].msg_list.length - 1].content): ""}}</div>
+              <div class = "contact_recent">{{
+                GetRecentMsg(i-1)
+                }}
+              </div>
             </div>
           </el-row>
         </div>
@@ -99,23 +102,33 @@
                   <el-button type="primary" @click="PlayHistoryAudio(contract_info[current_user.pubkey].msg_list[i-1].content)" >播放音频</el-button>
                 </el-row>
               </div>
+              <div class="his_msg" v-if="contract_info[current_user.pubkey].msg_list[i-1].msg_type == 3">
+                <el-image
+                  style="width: 100%; height: 300px"
+                  :src="contract_info[current_user.pubkey].msg_list[i-1].content"
+                  fit="scale-down"></el-image>
+              </div>
             </div>
             <div style="clear:both"></div>
           </el-row>
         </div>
         <el-row  class="box_toolbar" >
           <el-col :span="12">
-            <el-popover
-              placement="top-start"
-              width="160"
-              v-model:visible="show_emoji">
-                <div class="emoji_box">
-                  <div class="emoji" v-for="i in emoji_list.length" @click="ClickEmoji(emoji_list[i-1])">{{emoji_list[i-1]}}</div>
-                </div>
-              <template #reference>
-              <div class="emoji_btn" @click="show_emoji=true"></div>
-              </template>
-            </el-popover>
+            <el-row>
+              <el-popover
+                placement="top-start"
+                width="160"
+                v-model:visible="show_emoji">
+                  <div class="emoji_box">
+                    <div class="emoji" v-for="i in emoji_list.length" @click="ClickEmoji(emoji_list[i-1])">{{emoji_list[i-1]}}</div>
+                  </div>
+                <template #reference>
+                <div class="emoji_btn" @click="show_emoji=true"></div>
+                </template>
+              </el-popover>
+              <div class="image_btn" onclick="image_upload.click()"></div>
+              <input type="file"  style="display:none" id="image_upload" accept="image/jpeg, image/png, image/jpg">
+            </el-row>
           </el-col>
           <el-col :span="12" class="toolbar_right">
             <div :class="{audio_btn: !is_audio, text_btn: is_audio}" @click="is_audio = !is_audio"> </div>
@@ -155,6 +168,7 @@
       :with-header="false"
       direction="ltr">
       <div  class="tool_box">
+        <div class="tool_item" @click="OnOpenCreateGroupDlg()">创建群</div>
         <div class="tool_item">交易所</div>
         <div class="tool_item">新闻</div>
         <div class="tool_item">频道</div>
@@ -178,6 +192,9 @@
         <el-button type="primary" style="margin-top: 24px;" :disabled="!self_dlg.edited" @click="SelfInfoChange">确认修改</el-button>
       </div>
     </el-dialog>
+
+    <Group ref="create_group_dlg"/>
+
   </div>
 </template>
 
@@ -190,14 +207,57 @@ import { ethers } from 'ethers';
 import { CreateMsg } from '../assets/js/sc_msg'
 import { SubChainRest } from '../assets/js/sc_rest.js'
 import {ScAudio} from '../assets/js/sc_audio.js'
+import {InitFileUpload} from '../assets/js/sc_assist.js'
+import {app_data} from '../assets/js/app_js/data.js'
+import {
+  Init,
+  InitEmoji,
+  FlushAccounts,
+  ShowLogin,
+  OnShowNewAccount,
+  OnNewAccount,
+  Login,
+  OnLogin
+} from '../assets/js/app_js/login_page.js'
+import {
+  InitChatPage,
+  ShowAddFriend,
+  ClickContact,
+  Send,
+  SendImage,
+  OnReceiveMsg,
+  OnChatInputKeyDown,
+  OnChatInputBlur,
+  ClickEmoji,
+  ClickSelfLogo,
+  SelfInfoChange,
+  GetMsgHistory,
+  GetRecentMsg,
+  AddMsgToContract,
+  GetAllChatMsgByLatestInfo,
+  StartRecord,
+  StopRecord,
+  StartPlay,
+  StopPlay,
+  PlayHistoryAudio,
+  DrawHistoryAudio,
+  ResetAudio
+} from '../assets/js/app_js/chat_page.js'
 import {
   sc_socket,
   MSG_LOGIN,
   MSG_TXT,
   MSG_AUDIO,
-  MSG_AUDIO_TYPE_1
+  MSG_AUDIO_TYPE_1,
+  MSG_IMAGE
 } from '../assets/js/sc_net'
 import axios from "axios"
+import {
+  InitGroup,
+  OnOpenCreateGroupDlg,
+  CreateGroup
+} from '../assets/js/app_js/group' 
+import Group from "./Group.vue"
 var self = null
 
 export default {
@@ -205,484 +265,64 @@ export default {
   props: {
     msg: String
   },
- 
+  components: {
+    Group
+  },
   data () {
-    return {
-      b_show_login: true,
-      accounts: [],
-      user_name: '',
-      pswd: '',
-      show_new_account: false,
-      new_account_name: '',
-      new_account_pswd: '',
-      ws: null,
-
-      window_width: 0,
-      window_height: 0,
-      sc_rest: null,
-      user_info: {
-        age: 0,
-        nick: "",//"034b6661104faa38afd9840b7eb2e01055eca43ee0b3aa64ec2cf0f78d9e74260f",
-        pubkey: "", //"034b6661104faa38afd9840b7eb2e01055eca43ee0b3aa64ec2cf0f78d9e74260f",//"034b6661104faa38afd9840b7eb2e01055eca43ee0b3aa64ec2cf0f78d9e74260f",
-        sex: 0,
-        friends: [
-          //"03848f4284c4d8bdaa43ce52304cfac8a20fb54e64dcee877e1d10402ef971099c","029ccf9775826f5911af0036550cf80ebd29855b1144eab8d500900d8e4a444dd2"
-        ]
-      },
-      current_user: {
-        nick_name: "",//"03848f4284c4d8bdaa43ce52304cfac8a20fb54e64dcee877e1d10402ef971099c",
-        pubkey: ""//"03848f4284c4d8bdaa43ce52304cfac8a20fb54e64dcee877e1d10402ef971099c"
-      },
-      
-      contract_info:  {}/*{
-       "03848f4284c4d8bdaa43ce52304cfac8a20fb54e64dcee877e1d10402ef971099c": {
-          nick_name: "03848f4284c4d8bdaa43ce52304cfac8a20fb54e64dcee877e1d10402ef971099c",
-          unread_count: 10,
-          msg_list:[{
-            from: "03848f4284c4d8bdaa43ce52304cfac8a20fb54e64dcee877e1d10402ef971099c",
-            to: "aaa",
-            msg_type: 1,
-            content: "123456",
-            time: 1641712208
-          },{
-            from: "034b6661104faa38afd9840b7eb2e01055eca43ee0b3aa64ec2cf0f78d9e74260f",
-            to: "aaa",
-            msg_type: 1,
-            content: "aaabbb",
-            time: 1641712208
-          },{
-            from: "03848f4284c4d8bdaa43ce52304cfac8a20fb54e64dcee877e1d10402ef971099c",
-            to: "aaa",
-            msg_type: 1,
-            content: "cccddd",
-            time: 1641712208
-          }]
-        },
-      }*/,
-      msg_input:'',
-      show_emoji: false,
-      visible: false,
-      emoji_list:[],
-      chat_input_index: 0,
-      self_dlg:{
-        show_setting: false,
-        show_self_config: false,
-        self_dlg_nick_name: "",
-        edited: false
-      },
-      is_audio: false,
-      recorder: null
-    }
+    return app_data
   },
   mounted () {
+    // this.$refs.create_group_dlg.Show()
+    self = this
     this.Init()
+    InitGroup(this)
+    InitChatPage(this)
+    this.$refs.create_group_dlg.Init(this.CreateGroup)
   },
   methods: {
-    Init: function () {
-      self = this
-      this.window_width = window.innerWidth;
-      this.window_height = window.innerHeight;
-      window.addEventListener('resize', (event) => {
-        self.window_width = window.innerWidth;
-        self.window_height = window.innerHeight;
-      })
-      this.ShowLogin(true)
-      this.InitEmoji()
-    },
-    InitEmoji: function () {
-      var emoji_list ="😀😁😂🤣😃😄😅😆😉😊😋😎😍😘😗😙😚🙂🤗🤩🤔🤨😐😑😶🙄😏😣😥😮🤐😯😪😫😴😌😛😜😝🤤😒😓😔😕🙃🤑😲☹️🙁😖😞😟😤😢😭😦😧😨😩🤯😬😰😱😳🤪😵😡😠🤬😷🤒🤕🤢🤮🤧😇🤠🤡🤥🤫🤭🧐🤓😈👿👹👺💀👻👽🤖💩😺😸😹😻😼😽🙀😿😾"
-      for (var i = 0; i < emoji_list.length; i+=2) {
-        self.emoji_list.push(emoji_list.slice(i, i+2))
-      }
-      console.log(emoji_list.length)
-    },
-    FlushAccounts: function () {
-      this.accounts = sc_storage.GetAccountList()
-    },
-    ShowLogin: function (bshow) {
-      if (bshow) {
-        self.b_show_login = true
-        self.FlushAccounts()
-      } else {
-        self.b_show_login = false
-        // return
-        self.sc_rest.GetSelfInfo().then((d) => {
-          var data = d.data;
-          if ( data.error === 0 ) {
-            console.log("获取个人信息成功")
-            self.user_info = JSON.parse(data.data)
-            self.self_dlg.self_dlg_nick_name = self.user_info.nick
-            for (var i = 0; i < self.user_info.friends.length; i++) {
-              console.log(self.user_info.friends[i])
-              
-              self.contract_info[self.user_info.friends[i]] = {
-                nick_name: self.user_info.friends[i],
-                unread_count: 0,
-                msg_list:[]
-              }
-            }
+    // 初始化
+    Init: Init,
+    // 初始化emoji
+    InitEmoji: InitEmoji,
+    // 刷新所有的账户列表
+    FlushAccounts: FlushAccounts,
+    // 显示页面，true显示登录页面，false显示聊天页面
+    ShowLogin: ShowLogin,
+    // 显示创建账户页面
+    OnShowNewAccount: OnShowNewAccount,
+    // 用户创建新账户
+    OnNewAccount: OnNewAccount,
+    // 登录
+    Login: Login,
+    // 登录完成
+    OnLogin: OnLogin,
 
-            for (var i = 0; i < self.user_info.friends.length; i++) {
-              console.log("===========================================")
-              console.log(self.user_info.friends[i])
-              self.sc_rest.GetUserInfoInfo(self.user_info.friends[i]).then((d) => {
-                var data = d.data;
-                console.log("aaaaaa", data)
-                if ( data.error === 0 ) {
-                  console.log("获取好友用户信息成功")
-                  var user_info = JSON.parse(data.data)
-                  // console.log("ccccc", user_info.nick, self.user_info.friends[i], self.contract_info[self.user_info.friends[i]])
-                  self.contract_info[user_info.pubkey].nick_name = user_info.nick
-                }
-              }).catch((e) => {
-                console.log("获取好友用户信息失败")
-              }) 
-            }
-            self.GetAllChatMsgByLatestInfo()
-          } else {
-            console.log("获取个人信息失败")
-          }
 
-        }).catch((e)=>{
-          console.log("获取个人信息失败", e)
-        }) 
-      }
-    },
-    OnShowNewAccount: function () {
-      this.show_new_account = true
-      this.new_account_name = ''
-      this.new_account_pswd = ''
-    },
-    OnNewAccount: function () {
-      this.show_new_account = false,
-      sc_storage.CreateAccount(this.new_account_name, this.new_account_pswd)
-      this.FlushAccounts()
-    },
-    Login: function () {
-      var mnemonic_str = sc_storage.GetAccount(this.user_name, this.pswd)
-      var wallet = ethers.Wallet.fromMnemonic(mnemonic_str)
-      console.log(wallet.privateKey)
-      sc_socket.Open("ws://172.19.18.65:9902", wallet.privateKey.substring(2), this.OnLogin, this.OnReceiveMsg)
-      self.sc_rest = new SubChainRest(wallet.privateKey.substring(2))
-    },
-    OnLogin: function (msg) {
-      console.log("收到login的回复", msg)
-      self.ShowLogin(false)
-    },
-    ShowAddFriend: function () {
-      this.$prompt('请输入对方公钥', '添加好友', {
-        confirmButtonText: '确定添加',
-        cancelButtonText: '取消'
-      }).then(({ value }) => {
-        console.log("开始添加好友")
-        self.sc_rest.AddFriendByPubkey(value).then(function(d) {
-          var data = d.data
-          if (data.error !== 0){
-            self.$alert('添加好友失败:'+data.error, '发生错误', {
-              confirmButtonText: '确定',
-            });
-          } else {
-            self.user_info.friends.unshift(JSON.parse(data.data).pubkey)
-          }
-        }).catch(function (e) {
-          self.$alert('添加好友失败，'+e.toString(), '发生错误', {
-            confirmButtonText: '确定',
-          });
-        })
-      })
-    },
-    ClickContact: function (pubkey) {
-      if ( pubkey != self.current_user.pubkey ) {
-        self.current_user.pubkey = pubkey
-        self.current_user.nick_name = self.contract_info[pubkey].nick_name;
-        if( self.contract_info[self.current_user.pubkey].unread_count !== 0) {
-          self.contract_info[self.current_user.pubkey].unread_count = 0
-          sc_socket.ClearUnread(pubkey)
-        }
-        
-        console.log(pubkey)
-        console.log(self.user_info.friends[0])
-        console.log(self.current_user.pubkey)
-        console.log(self.user_info.friends[0]===self.current_user.pubkey )
-        // 对话移动到最下方
-        self.$nextTick(()=>{
-          var height = self.$refs.box_history.scrollHeight;
-          console.log("高度", height)
-          self.$refs.box_history.scrollTo(0, height)
-        })
-        // 重置音频
-        self.ResetAudio();
-      }
-    },
-    test: function(){
-
-    },
-    Send: function() {
-      if (!this.is_audio) {
-        var time_now = sc_socket.SendText(self.current_user.pubkey, this.msg_input)
-        // 将消息插入对话框
-        self.contract_info[self.current_user.pubkey].msg_list.push({
-          from: self.user_info.pubkey,
-          to: self.current_user.pubkey,
-          msg_type: MSG_TXT,
-          time: time_now,
-          content: this.msg_input
-        })
-        this.msg_input = ""
-        this.chat_input_index = 0
-        if (this.recorder){
-          this.recorder.Reset()
-        }
-      } else {
-        var time_now = sc_socket.SendAudio(self.current_user.pubkey, this.recorder.buffer, MSG_AUDIO_TYPE_1)
-        // 将消息插入对话框
-        self.contract_info[self.current_user.pubkey].msg_list.push({
-          from: self.user_info.pubkey,
-          to: self.current_user.pubkey,
-          msg_type: MSG_AUDIO,
-          time: time_now,
-          content: JSON.stringify({
-              audio_type: MSG_AUDIO_TYPE_1,
-              audio_msg: JSON.stringify(this.recorder.buffer)
-          })
-        })
-        this.msg_input = ""
-        this.chat_input_index = 0
-        if (this.recorder){
-          this.recorder.Reset()
-        }
-      }
-      // 将消息移动到最下方
-      self.$nextTick(()=>{
-        var height = self.$refs.box_history.scrollHeight;
-        self.$refs.box_history.scrollTo(0, height)
-      })
-
-    },
-    OnReceiveMsg: function(msg) {
-      console.log("收到信息", msg)
-      self.AddMsgToContract(msg)
-      // 把历史消息滚动条移动到最下方
-      self.$nextTick(()=>{
-        var height = self.$refs.box_history.scrollHeight;
-        console.log("高度", height)
-        self.$refs.box_history.scrollTo(0, height)
-      })
-    }, 
-    OnChatInputKeyDown(event) {
-      console.log(event)
-      if (event.keyCode == 13) {
-        if (!event.metaKey) {
-          event.preventDefault();
-          self.Send();
-        } else {
-          this.msg_input = this.msg_input + '\n';
-        }
-      }
-    },
-    OnChatInputBlur(e) {
-      this.chat_input_index = e.srcElement.selectionStart; 
-    },
-    ClickEmoji(emoji) {
-      this.msg_input = this.msg_input.slice(0, this.chat_input_index) + emoji+this.msg_input.slice(this.chat_input_index, this.msg_input.length)
-      this.chat_input_index += 2
-    },
-    ClickSelfLogo() {
-      console.log("click logo")
-      self.self_dlg.show_setting = true
-    },
-    // 修改个人信息，确定
-    SelfInfoChange() {
-      // console.log(self.self_dlg.self_dlg_nick_name)
-      self.sc_rest.ChangeNickName(self.self_dlg.self_dlg_nick_name).then((d) => {
-        var data = d.data;
-        if ( data.error === 0 ) {
-          console.log("修改用户名成功")
-          self.user_info.nick = self.self_dlg.self_dlg_nick_name;
-          self.self_dlg.self_dlg_nick_name = "";
-        } else {
-          console.log("获取用户信息失败")
-        }
-
-      }).catch((e)=>{
-        console.log("获取用户信息失败", e)
-      }) 
-    },
-    GetMsgHistory() {
-      self.sc_rest.GetMsgHistory(self.self_dlg.self_dlg_nick_name).then((d) => {
-        var data = d.data;
-        if ( data.error === 0 ) {
-          console.log("修改用户名成功")
-          self.user_info.nick = self.self_dlg.self_dlg_nick_name;
-          self.self_dlg.self_dlg_nick_name = "";
-        } else {
-          console.log("获取用户信息失败")
-        }
-
-      }).catch((e)=>{
-        console.log("获取用户信息失败", e)
-      }) 
-    },
-    AddMsgToContract(msg) {
-      var pubkey_in = ""
-      if (msg.base_msg.from == self.user_info.pubkey) {
-        pubkey_in = msg.base_msg.to
-      } else if(msg.base_msg.to == self.user_info.pubkey) {
-        pubkey_in = msg.base_msg.from
-      } else {
-        console.log("收到一条奇怪的消息！！！！！！！！！！！！")
-        return
-      }
-      console.log("插入一条信息", msg)
-      if ( !self.contract_info.hasOwnProperty(pubkey_in) ){
-        // 先添加一个
-        self.contract_info[pubkey_in] = {
-          nick_name: pubkey_in,
-          unread_count: 1,
-          msg_list: [
-            {
-              from: msg.base_msg.from,
-              to: msg.base_msg.to,
-              msg_type: msg.base_msg.msg_type,
-              time: msg.base_msg.time_stamp,
-              content: msg.base_msg.content
-            }
-          ]
-        }
-        // 获取用户信息
-        self.sc_rest.GetUserInfoInfo(pubkey_in).then((d) => {
-          var data = d.data;
-          if ( data.error === 0 ) {
-            console.log("获取用户信息成功")
-            var user_info = JSON.parse(data.data)
-            self.contract_info[pubkey_in].nick_name = user_info.nick
-            self.user_info.friends.push(pubkey_in)
-            // self.$set(self.contract_info, self.contract_info);
-            console.log(self.contract_info)
-            console.log(self.user_info)
-          } else {
-            console.log("获取用户信息失败")
-          }
-
-        }).catch((e)=>{
-          console.log("获取用户信息失败", e)
-        }) 
-      } else {
-        if ( pubkey_in != self.current_user.pubkey) {
-          // 如果不是当前聊天窗口则添加一个未读消息
-          console.log("add unread_count", self.contract_info[pubkey_in].unread_count)
-          self.contract_info[pubkey_in].unread_count += 1
-        } else {
-          // 如果是当前聊天则清空服务器聊天信息
-          sc_socket.ClearUnread(self.current_user.pubkey)
-        }
-        // 信息插入历史消息中
-        self.contract_info[pubkey_in].msg_list.push({
-          from: msg.base_msg.from,
-          to: msg.base_msg.to,
-          msg_type: msg.base_msg.msg_type,
-          time: msg.base_msg.time_stamp,
-          content: msg.base_msg.content
-        })
-      }
-    },
-    // 初始获取所有聊天记录
-    GetAllChatMsgByLatestInfo() {
-      self.sc_rest.GetAllChatMsgByLatestInfo().then((d) => {
-        //OnReceiveMsg
-        console.log("获取聊天历史记录成功", JSON.parse(d.data.data))
-        var data = JSON.parse(d.data.data)
-        for (var friend_pubkey in data.history){
-          for (var i = 0; i < data.history[friend_pubkey].msg_list.length; i++) {
-            var obj_json = JSON.parse(data.history[friend_pubkey].msg_list[i])
-            // 检查消息是否合法
-            if (sc_socket.CheckSign(obj_json)) {
-              console.log("添加的消息合法")
-              if (obj_json.base_msg.from == self.user_info.pubkey){
-                obj_json.base_msg.content = sc_crypto.EcdhDecode(obj_json.base_msg.msg, obj_json.base_msg.time_stamp, sc_socket.pri_key, obj_json.base_msg.to)
-                self.AddMsgToContract(obj_json);
-              }
-              else if (obj_json.base_msg.to == self.user_info.pubkey) {
-                obj_json.base_msg.content = sc_crypto.EcdhDecode(obj_json.base_msg.msg, obj_json.base_msg.time_stamp, sc_socket.pri_key, obj_json.base_msg.from)
-                self.AddMsgToContract(obj_json);
-              }
-              else {
-                console.log("收到了诡异的消息")
-              }
-            } else {
-              console.log("添加的消息非法!!!!!!!!!!!!!!!!!")
-              continue
-            } 
-          }
-          console.log("开始设置未读！！！！！！！！！！！！！！！！！！！！！！！！！！！！！")
-          console.log(data.history[friend_pubkey].unread_count)
-          console.log(self.contract_info[friend_pubkey].unread_count)
-          
-          self.contract_info[friend_pubkey].unread_count = data.history[friend_pubkey].unread_count
-        }
-      }).catch((e)=>{
-        console.log("获取聊天历史记录出错", e)
-      })
-    },
-    StartRecord: function() {
-      this.recorder = new ScAudio();
-      this.recorder.StartRecord("canvas")
-    },
-    StopRecord: function() {
-      this.recorder.StopRecord()
-      console.log(this.recorder.buffer)
-      //this.recorder.Draw("canvas")
-    },
-    StartPlay() {
-      this.recorder.StartPlay()
-    },
-    StopPlay() {
-      this.recorder.StopPlay()
-      
-    },
-    PlayHistoryAudio(audio_content) {
-      var audio_json = JSON.parse(audio_content)
-      audio_json.audio_msg = JSON.parse(audio_json.audio_msg)
-      console.log(audio_json)
-      // console.log(self.recorder)
-      var audio = new ScAudio()
-      audio.Init("")
-      var buf = []
-      for(var i = 0; i < audio_json.audio_msg.length; i++ ) {
-        var array = new Float32Array(Object.keys(audio_json.audio_msg[i]).length)
-
-        for ( var k in audio_json.audio_msg[i]){
-          array[k] = audio_json.audio_msg[i][k] 
-        }
-        buf.push(array)
-      }
-      audio.StartPlayBuffer(audio_json.audio_type, buf)
-    },
-    DrawHistoryAudio(audio_content) {
-      var hash = this.Hash(audio_content)
-      var audio_json = JSON.parse(audio_content)
-      audio_json.audio_msg = JSON.parse(audio_json.audio_msg)
-      console.log(audio_json)
-
-      var buf = []
-      for(var i = 0; i < audio_json.audio_msg.length; i++ ) {
-        var array = new Float32Array(Object.keys(audio_json.audio_msg[i]).length)
-
-        for ( var k in audio_json.audio_msg[i]){
-          array[k] = audio_json.audio_msg[i][k] 
-        }
-        buf.push(array)
-      }
-      ScAudio.DrawByBuf("canvas_"+hash, buf)
-    },
-    ResetAudio() {
-      if (this.recorder){
-        this.recorder.Reset();
-      }
-    },
-    Hash(input) {
-      return sc_crypto.Hash(input)
-    }
+    ShowAddFriend:ShowAddFriend,
+    ClickContact:ClickContact,
+    Send:Send,
+    SendImage:SendImage,
+    OnReceiveMsg:OnReceiveMsg,
+    OnChatInputKeyDown:OnChatInputKeyDown,
+    OnChatInputBlur:OnChatInputBlur,
+    ClickEmoji:ClickEmoji,
+    ClickSelfLogo:ClickSelfLogo,
+    SelfInfoChange:SelfInfoChange,
+    GetMsgHistory:GetMsgHistory,
+    GetRecentMsg:GetRecentMsg,
+    AddMsgToContract:AddMsgToContract,
+    GetAllChatMsgByLatestInfo:GetAllChatMsgByLatestInfo,
+    StartRecord:StartRecord,
+    StopRecord:StopRecord,
+    StartPlay:StartPlay,
+    StopPlay:StopPlay,
+    PlayHistoryAudio:PlayHistoryAudio,
+    DrawHistoryAudio:DrawHistoryAudio,
+    ResetAudio:ResetAudio,
+    // 当打开创建群的界面
+    OnOpenCreateGroupDlg:OnOpenCreateGroupDlg,
+    // 当点击创建群
+    CreateGroup: CreateGroup,
   }
 }
 </script>

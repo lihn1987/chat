@@ -17,7 +17,7 @@ sha256 = "1.0"
 hex = "0.4"
 mongo_interface = { path = "../mongo_interface" }
 msg_interface = { path = "../msg_interface" }
-
+rand = "0.3.7"
 [dependencies.mongodb]
 version = "2.0.0"
 default-features = false
